@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dukaan Helper</title>
+<style>
+:root{--bg:#fff8ef;--card:#fff;--ink:#2a2118;--accent:#d9480f;--muted:#7a6a58}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+main{max-width:720px;margin:0 auto;padding:20px 16px 60px}
+h1{margin:0 0 4px;color:var(--accent)} .sub{color:var(--muted);margin:0 0 20px}
+.card{background:var(--card);border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 1px 4px #0002}
+label{display:block;font-weight:600;margin:10px 0 4px}
+input,textarea,select{width:100%;padding:10px;border:1px solid #d8c9b5;border-radius:8px;font:inherit}
+textarea{min-height:110px}
+button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:11px 18px;font:inherit;font-weight:600;cursor:pointer;margin-top:12px}
+button.sec{background:#fff;color:var(--accent);border:1px solid var(--accent)}
+button:disabled{opacity:.6}
+pre{white-space:pre-wrap;background:#f6efe4;padding:12px;border-radius:8px;margin:0;font:inherit}
+.row{display:flex;gap:10px} .row>*{flex:1}
+details summary{cursor:pointer;color:var(--muted)}
+#status{color:var(--muted);margin-top:8px}
+</style>
+</head>
+<body>
+<main>
+<h1>🛍️ Dukaan Helper</h1>
+<p class="sub">Type your product details in Hindi, Hinglish or English. Get a ready-to-send catalog message. Runs on an open-source model on your own computer.</p>
+
+<div class="card">
+  <label for="details">Product details (any language)</label>
+  <textarea id="details" placeholder="e.g. cotton ki kurti, size M L XL, rang neela aur laal, price 450, free delivery Delhi mein"></textarea>
+  <div class="row">
+    <div><label for="lang">Write listing in</label>
+      <select id="lang"><option>English</option><option>Hindi</option><option>Hinglish</option></select></div>
+    <div><label for="style">Style</label>
+      <select id="style"><option>WhatsApp catalog message</option><option>Etsy / online listing</option><option>Instagram caption</option></select></div>
+  </div>
+  <button id="go">Write my listing</button>
+  <div id="status"></div>
+</div>
+
+<div class="card" id="outCard" hidden>
+  <pre id="out"></pre>
+  <button class="sec" id="copy">Copy</button>
+</div>
+
+<details class="card">
+  <summary>Settings (model &amp; server)</summary>
+  <label for="url">Model server URL (Ollama)</label>
+  <input id="url" value="http://localhost:11434">
+  <label for="model">Model name</label>
+  <input id="model" value="gemma3:1b">
+  <p class="sub">Default setup: Ollama running Gemma on this computer. No internet, no API key, no cost, and your shop data never leaves your laptop.</p>
+</details>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+function load(){try{const s=JSON.parse(localStorage.getItem('dh')||'{}');if(s.url)$('url').value=s.url;if(s.model)$('model').value=s.model}catch(e){}}
+load();
+function buildPrompt(d,lang,style){
+ return `You help small shopkeepers in India sell online. Turn the product details below into a "${style}" written in ${lang}.
+Rules: use ONLY facts given (do not invent prices, sizes, colours or materials). Keep it short, friendly and clear. Include price and delivery if given. Add 2-3 fitting emojis. End with a line asking the buyer to message to order. Output only the final text.
+
+Product details:
+${d}`;
+}
+$('go').onclick=async()=>{
+ const d=$('details').value.trim(); if(!d){$('status').textContent='Please type some product details first.';return}
+ try{localStorage.setItem('dh',JSON.stringify({url:$('url').value,model:$('model').value}))}catch(e){}
+ $('go').disabled=true;$('status').textContent='Thinking… (first run can take a minute)';$('outCard').hidden=true;
+ try{
+  const r=await fetch($('url').value.replace(/\/$/,'')+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({model:$('model').value,stream:false,messages:[{role:'user',content:buildPrompt(d,$('lang').value,$('style').value)}]})});
+  if(!r.ok)throw new Error('Server said '+r.status+': '+(await r.text()).slice(0,200));
+  const j=await r.json();
+  $('out').textContent=(j.message&&j.message.content||'').trim();
+  $('outCard').hidden=false;$('status').textContent='Done ✅';
+ }catch(e){
+  $('status').textContent='Could not reach the model. Is Ollama running? ('+e.message+')';
+ }
+ $('go').disabled=false;
+};
+$('copy').onclick=async()=>{await navigator.clipboard.writeText($('out').textContent);$('copy').textContent='Copied!';setTimeout(()=>$('copy').textContent='Copy',1500)};
+</script>
+</body>
+</html>
